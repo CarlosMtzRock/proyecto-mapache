@@ -43,7 +43,7 @@ graph TD
 ```
 ## 📂 Estructura de Carpetas
 ```
-src/main/java/com/miempresa/pmosystem/
+src/main/java/mx.uacm.edu.proyectofinal
 │
 ├── controller/
 │   └── Controladores REST - Endpoints de la API
