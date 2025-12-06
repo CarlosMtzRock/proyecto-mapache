@@ -159,9 +159,9 @@ cd administracion-etapas
 
 ## Paso 2: Crear la Base de Datos
 
-Ingresa a tu cliente de MariaDB y ejecuta:
+Ingresa a tu cliente de MariaDB y crea una base de datos con el nombre:
 
 
-*CREATE DATABASE etapas_db;*
+*etapasbd;*
 
 Paso 3: Ejecutar la aplicación
