@@ -2,6 +2,7 @@ package mx.uacm.edu.proyecto.proyectofinal.cotroller;
 
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import mx.uacm.edu.proyecto.proyectofinal.dto.EtapaActualizarDTO;
 import mx.uacm.edu.proyecto.proyectofinal.dto.EtapaRequestDTO;
 import mx.uacm.edu.proyecto.proyectofinal.dto.EtapaResponseDTO;
 import mx.uacm.edu.proyecto.proyectofinal.service.EtapaService;
@@ -10,6 +11,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/v1")
@@ -48,5 +50,52 @@ public class EtapaController {
 
         // Si la lista está vacia, devuelve 200 OK con array vacío []
         return ResponseEntity.ok(etapas);
+    }
+
+    /**
+     * RF-04: Actualizar Etapa (Cambio de estado o info)
+     * Endpoint: PATCH /api/v1/etapas/{idEtapa}
+     */
+    @PatchMapping("/etapas/{idEtapa}")
+    public ResponseEntity<EtapaResponseDTO> actualizarEtapa(
+            @PathVariable Long idEtapa,
+            @RequestBody EtapaActualizarDTO dto) { // @Valid opcional si agregas constraints al DTO
+
+        EtapaResponseDTO response = etapaService.actualizarEtapa(idEtapa, dto);
+
+        return ResponseEntity.ok(response);
+    }
+
+    /**
+     * RF-06: Reordenar Etapa Manualmente
+     * Endpoint: PATCH /api/v1/etapas/{idEtapa}/reordenar
+     * Body: { "nuevoOrden": 3 }
+     */
+    @PatchMapping("/etapas/{idEtapa}/reordenar")
+    public ResponseEntity<Void> reordenarEtapa(
+            @PathVariable Long idEtapa,
+            @RequestBody Map<String, Integer> body) {
+
+        Integer nuevoOrden = body.get("nuevoOrden");
+        if (nuevoOrden == null) {
+            throw new IllegalArgumentException("El campo 'nuevoOrden' es obligatorio.");
+        }
+
+        etapaService.reordenarEtapa(idEtapa, nuevoOrden);
+
+        return ResponseEntity.ok().build();
+    }
+
+    /**
+     * RF-07: Eliminar Etapa
+     * Endpoint: DELETE /api/v1/etapas/{idEtapa}
+     */
+    @DeleteMapping("/etapas/{idEtapa}")
+    public ResponseEntity<Void> eliminarEtapa(@PathVariable Long idEtapa) {
+
+        etapaService.eliminarEtapa(idEtapa);
+
+        // Retornamos 204 No Content (Estándar para borrados exitosos)
+        return ResponseEntity.noContent().build();
     }
 }

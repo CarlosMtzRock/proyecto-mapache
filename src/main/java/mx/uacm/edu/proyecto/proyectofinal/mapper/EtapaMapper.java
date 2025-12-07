@@ -1,5 +1,6 @@
 package mx.uacm.edu.proyecto.proyectofinal.mapper;
 
+import lombok.RequiredArgsConstructor;
 import mx.uacm.edu.proyecto.proyectofinal.dto.EtapaRequestDTO;
 import mx.uacm.edu.proyecto.proyectofinal.dto.EtapaResponseDTO;
 import mx.uacm.edu.proyecto.proyectofinal.model.Etapa;
@@ -11,9 +12,12 @@ import org.springframework.stereotype.Component;
 import java.math.BigDecimal;
 
 @Component
+@RequiredArgsConstructor
 public class EtapaMapper {
 
-    // Convierte el Request DTO a la Entidad Etapa (para guardar)
+    // Inyección de dependencias dentro del mapper
+    private final PresupuestoMapper presupuestoMapper;
+
     public Etapa toEntity(EtapaRequestDTO dto, Proyecto proyecto) {
         return Etapa.builder()
                 .proyecto(proyecto)
@@ -22,41 +26,26 @@ public class EtapaMapper {
                 .numeroOrden(dto.getNumeroOrden())
                 .fechaInicioPlan(dto.getFechaInicioPlan())
                 .fechaFinPlan(dto.getFechaFinPlan())
-                .estado(EstadoEtapa.PLANIFICADA) // RA-01
+                .estado(EstadoEtapa.PLANIFICADA)
                 .porcentajeAvance(0)
                 .build();
     }
 
-    // Convierte la Entidad Etapa mas Presupuesto a Response DTO (para responder)
+    // Versión 1: Cuando recibimos Etapa + Presupuesto específico
     public EtapaResponseDTO toResponse(Etapa etapa, Presupuesto presupuesto) {
-        BigDecimal asignado = (presupuesto != null) ? presupuesto.getMontoAprobado() : BigDecimal.ZERO;
-        BigDecimal gastado = (presupuesto != null) ? presupuesto.getMontoGastado() : BigDecimal.ZERO;
-
-        return EtapaResponseDTO.builder()
-                .idEtapa(etapa.getIdEtapa())
-                .idProyecto(etapa.getProyecto().getIdProyecto())
-                .nombre(etapa.getNombre())
-                .descripcion(etapa.getDescripcion())
-                .numeroOrden(etapa.getNumeroOrden())
-                .fechaInicioPlan(etapa.getFechaInicioPlan())
-                .fechaFinPlan(etapa.getFechaFinPlan())
-                .estado(etapa.getEstado())
-                .porcentajeAvance(etapa.getPorcentajeAvance())
-                .presupuestoAsignado(asignado)
-                .presupuestoGastado(gastado)
-                .build();
+        return buildResponse(etapa,
+                presupuesto != null ? presupuesto.getMontoAprobado() : BigDecimal.ZERO,
+                presupuesto != null ? presupuesto.getMontoGastado() : BigDecimal.ZERO);
     }
 
-    // Convierte Entidad (con su lista de presupuestos) a DTO
+    // Versión 2: Cuando recibimos solo Etapa (lista) y sumamos sus presupuestos
     public EtapaResponseDTO toResponse(Etapa etapa) {
-        // Lógica de Agregación: Sumar todos los presupuestos asignados a esta etapa
-        // Si la lista es null o vacía, reduce a Cero.
         BigDecimal totalAsignado = BigDecimal.ZERO;
         BigDecimal totalGastado = BigDecimal.ZERO;
 
-        if (etapa.getPresupuestos() != null) {
+        if (etapa.getPresupuestos() != null && !etapa.getPresupuestos().isEmpty()) {
             totalAsignado = etapa.getPresupuestos().stream()
-                    .map(p -> p.getMontoAprobado())
+                    .map(Presupuesto::getMontoAprobado)
                     .reduce(BigDecimal.ZERO, BigDecimal::add);
 
             totalGastado = etapa.getPresupuestos().stream()
@@ -64,6 +53,11 @@ public class EtapaMapper {
                     .reduce(BigDecimal.ZERO, BigDecimal::add);
         }
 
+        return buildResponse(etapa, totalAsignado, totalGastado);
+    }
+
+    // Método privado para evitar repetir código de construcción
+    private EtapaResponseDTO buildResponse(Etapa etapa, BigDecimal asignado, BigDecimal gastado) {
         return EtapaResponseDTO.builder()
                 .idEtapa(etapa.getIdEtapa())
                 .idProyecto(etapa.getProyecto().getIdProyecto())
@@ -72,12 +66,12 @@ public class EtapaMapper {
                 .numeroOrden(etapa.getNumeroOrden())
                 .fechaInicioPlan(etapa.getFechaInicioPlan())
                 .fechaFinPlan(etapa.getFechaFinPlan())
-                .fechaInicioReal(etapa.getFechaInicioReal()) // Agregamos fechas reales
+                .fechaInicioReal(etapa.getFechaInicioReal())
                 .fechaFinReal(etapa.getFechaFinReal())
                 .estado(etapa.getEstado())
                 .porcentajeAvance(etapa.getPorcentajeAvance())
-                .presupuestoAsignado(totalAsignado) // Suma calculada
-                .presupuestoGastado(totalGastado)   // Suma calculada
+                .presupuestoAsignado(asignado)
+                .presupuestoGastado(gastado)
                 .build();
     }
 }

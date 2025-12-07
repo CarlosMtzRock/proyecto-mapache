@@ -15,4 +15,6 @@ public interface ActividadRepository extends JpaRepository<Actividad, Long> {
     // Para la Regla RV-05: Contar cuántas actividades NO están completadas ni canceladas
     // "Select count(*) from actividad where id_etapa = ? and estado NOT IN ('COMPLETADA', 'CANCELADA')"
     long countByEtapaIdEtapaAndEstadoNotIn(Long idEtapa, List<String> estadosFinales);
+
+    boolean existsByEtapaIdEtapa(Long idEtapa);
 }

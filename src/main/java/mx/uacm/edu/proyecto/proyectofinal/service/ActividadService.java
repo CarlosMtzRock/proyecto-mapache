@@ -1,5 +1,6 @@
 package mx.uacm.edu.proyecto.proyectofinal.service;
 
+import mx.uacm.edu.proyecto.proyectofinal.dto.ActividadAvanceDTO;
 import mx.uacm.edu.proyecto.proyectofinal.dto.ActividadRequestDTO;
 import mx.uacm.edu.proyecto.proyectofinal.model.Actividad;
 import java.util.List;
@@ -13,4 +14,7 @@ public interface ActividadService {
 
     // Eliminar actividad (solo si no está iniciada, por ejemplo)
     void eliminarActividad(Long idActividad);
+
+    // Método crítico para RA-02
+    Actividad actualizarAvance(Long idActividad, ActividadAvanceDTO dto);
 }

@@ -16,6 +16,15 @@ public interface PresupuestoRepository extends JpaRepository<Presupuesto, Long> 
     Optional<Presupuesto> findByEtapaIdEtapa(Long idEtapa);
 
     // Regla RN-09: Sumar todos los montos aprobados de un proyecto
-    @Query("SELECT SUM(p.montoAprobado) FROM Presupuesto p WHERE p.etapa.proyecto.idProyecto = :idProyecto")
+    // COALESCE es para que si no hay registros devuelva 0 en vez de null
+    @Query("SELECT COALESCE(SUM(p.montoAprobado), 0) FROM Presupuesto p WHERE p.etapa.proyecto.idProyecto = :idProyecto")
     BigDecimal sumarPresupuestosPorProyecto(@Param("idProyecto") Long idProyecto);
+
+    // Devuelve true si existe algún presupuesto en esa etapa con montoGastado > 0
+    boolean existsByEtapaIdEtapaAndMontoGastadoGreaterThan(Long idEtapa, java.math.BigDecimal monto);
+
+    // Calcular cuánto se ha gastado en total en el proyecto
+    // Navegación: Presupuesto -> Etapa -> Proyecto
+    @Query("SELECT COALESCE(SUM(p.montoGastado), 0) FROM Presupuesto p WHERE p.etapa.proyecto.idProyecto = :idProyecto")
+    BigDecimal sumarGastoRealPorProyecto(@Param("idProyecto") Long idProyecto);
 }
