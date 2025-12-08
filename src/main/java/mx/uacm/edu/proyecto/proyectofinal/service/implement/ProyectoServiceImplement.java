@@ -18,94 +18,94 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 
+// Este servicio se encarga de la logica de negocio a nivel de Proyecto
 @Service
 @RequiredArgsConstructor
 public class ProyectoServiceImplement implements ProyectoService {
 
+    // Inyectamos los repositorios y mappers que necesitamos
     private final ProyectoRepository proyectoRepository;
     private final EtapaRepository etapaRepository;
-
-
     private final PresupuestoRepository presupuestoRepository;
     private final ProyectoMapper proyectoMapper;
 
     @Override
     @Transactional
     public void recalcularEstadoProyecto(Long idProyecto) {
+        // Buscamos el proyecto que vamos a recalcular
         Proyecto proyecto = proyectoRepository.findById(idProyecto)
                 .orElseThrow(() -> new ResourceNotFoundException("Proyecto no encontrado"));
 
+        // Obtenemos todas sus etapas para hacer los calculos
         List<Etapa> etapas = etapaRepository.findByProyectoIdProyecto(idProyecto);
 
+        // Si no hay etapas, no hay nada que calcular
         if (etapas.isEmpty()) {
-            return; // Nada que calcular
+            return;
         }
 
-        // 1. RA-09: Recálculo de Avance Global (Promedio simple)
-        // Podría ser ponderado si las etapas tuvieran "peso", pero usaremos promedio simple.
+        // RA-09: Recalculamos el avance global del proyecto
+        // Usamos un promedio simple del avance de todas las etapas
         double sumaAvance = etapas.stream().mapToInt(Etapa::getPorcentajeAvance).sum();
         int promedioGlobal = (int) (sumaAvance / etapas.size());
 
-        // Aquí asumiríamos que Proyecto tiene un campo 'porcentajeAvance'.
-        // Si no lo tiene en la Entity, habría que agregarlo.
-        // Por ahora lo simulamos o actualizamos solo el estado.
+        // Aqui actualizariamos un campo 'porcentajeAvance' en la entidad Proyecto si existiera
         // proyecto.setPorcentajeAvance(promedioGlobal);
 
-        // 2. RA-05 y RA-08: Gestión de Estado Automático
+        // RA-05 y RA-08: Gestionamos el estado del proyecto automaticamente
+        // Verificamos si todavia hay etapas pendientes (que no esten completadas o canceladas)
         boolean hayPendientes = etapas.stream()
                 .anyMatch(e -> e.getEstado() != EstadoEtapa.COMPLETADA && e.getEstado() != EstadoEtapa.CANCELADA);
 
         if (!hayPendientes) {
-            // RA-05: Todas están completadas/canceladas -> CERRAR PROYECTO
+            // RA-05: Si no hay pendientes, significa que todo termino, asi que cerramos el proyecto
             if (!"COMPLETADO".equals(proyecto.getEstado())) {
                 proyecto.setEstado("COMPLETADO");
                 proyecto.setFechaFinReal(LocalDate.now());
-                System.out.println("🚀 Proyecto " + idProyecto + " marcado como COMPLETADO automáticamente.");
             }
         } else {
-            // RA-08: Hay cosas pendientes -> ABRIR PROYECTO (Regresión)
-            // Si estaba completado y agregaron una etapa nueva, vuelve a EN_PROGRESO
+            // RA-08: Si hay pendientes, el proyecto debe estar activo
+            // Esto es util si un proyecto ya estaba 'COMPLETADO' y se le agrega una nueva etapa
             if ("COMPLETADO".equals(proyecto.getEstado())) {
                 proyecto.setEstado("EN_PROGRESO");
-                proyecto.setFechaFinReal(null); // Limpiamos la fecha fin
-                System.out.println("🔄 Proyecto " + idProyecto + " reactivado a EN_PROGRESO.");
+                proyecto.setFechaFinReal(null); // Limpiamos la fecha de fin porque se reabrio
             }
         }
 
+        // Guardamos los cambios en el estado del proyecto
         proyectoRepository.save(proyecto);
     }
 
     @Override
-    @Transactional(readOnly = true) // Importante: Solo lectura para mejorar rendimiento
+    @Transactional(readOnly = true) // Marcamos como solo lectura para optimizar la consulta
     public DashboardDTO obtenerDashboard(Long idProyecto) {
 
-        // 1. Obtener entidad base
+        // 1. Obtenemos la entidad principal del proyecto
         Proyecto proyecto = proyectoRepository.findById(idProyecto)
                 .orElseThrow(() -> new ResourceNotFoundException("Proyecto no encontrado"));
 
-        // 2. Obtener Métricas de Etapa (Tiempo y Cantidad)
+        // 2. Obtenemos metricas relacionadas con las etapas (tiempo y cantidad)
         Double promedioAvance = etapaRepository.obtenerPromedioAvance(idProyecto);
         Long totalEtapas = etapaRepository.countByProyectoIdProyecto(idProyecto);
         Long etapasCompletadas = etapaRepository.countByProyectoIdProyectoAndEstado(idProyecto, EstadoEtapa.COMPLETADA);
         Long etapasAtrasadas = etapaRepository.contarEtapasAtrasadas(idProyecto);
 
-        // 3. Obtener Métricas Financieras (Dinero)
+        // 3. Obtenemos metricas financieras (dinero)
         BigDecimal gastoTotal = presupuestoRepository.sumarGastoRealPorProyecto(idProyecto);
 
-        // 4. Armar el DTO usando el Mapper
-        // (Nota: Estamos reutilizando el mapper que creamos en el paso anterior, ajustando parámetros)
-
+        // 4. Construimos el DTO del Dashboard con toda la informacion recolectada
+        // Usamos el patron Builder para que el codigo sea mas legible
         return DashboardDTO.builder()
                 .idProyecto(proyecto.getIdProyecto())
                 .nombreProyecto(proyecto.getNombre())
                 .estadoProyecto(proyecto.getEstado())
                 .fechaFinEstimada(proyecto.getFechaFinEstimada())
-                // Métricas
-                .avanceGlobal(promedioAvance.intValue()) // Convertimos double a int (ej: 45.6 -> 45%)
+                // Metricas de avance
+                .avanceGlobal(promedioAvance.intValue()) // Convertimos el double a un entero para el porcentaje
                 .etapasTotales(totalEtapas)
                 .etapasCompletadas(etapasCompletadas)
                 .etapasConRetraso(etapasAtrasadas)
-                // Finanzas
+                // Metricas de finanzas
                 .presupuestoTotal(proyecto.getPresupuestoTotalObjetivo())
                 .gastoEjecutado(gastoTotal)
                 .presupuestoRestante(proyecto.getPresupuestoTotalObjetivo().subtract(gastoTotal))

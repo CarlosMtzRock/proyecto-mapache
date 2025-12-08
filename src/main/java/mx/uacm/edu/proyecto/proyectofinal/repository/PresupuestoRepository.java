@@ -12,7 +12,7 @@ import java.util.Optional;
 @Repository
 public interface PresupuestoRepository extends JpaRepository<Presupuesto, Long> {
 
-    // Buscar el presupuesto asociado a una etapa
+    // Buscamos el presupuesto asociado a una etapa
     Optional<Presupuesto> findByEtapaIdEtapa(Long idEtapa);
 
     // Regla RN-09: Sumar todos los montos aprobados de un proyecto

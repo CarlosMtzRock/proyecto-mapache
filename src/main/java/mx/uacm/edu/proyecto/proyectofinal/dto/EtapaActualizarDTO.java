@@ -5,7 +5,10 @@ import mx.uacm.edu.proyecto.proyectofinal.model.EstadoEtapa;
 
 @Data
 public class EtapaActualizarDTO {
+    // El nuevo nombre de la etapa
     private String nombre;
+    // La nueva descripción de la etapa
     private String descripcion;
-    private EstadoEtapa nuevoEstado; // El estado al que queremos movernos
+    // El nuevo estado de la etapa
+    private EstadoEtapa nuevoEstado; 
 }

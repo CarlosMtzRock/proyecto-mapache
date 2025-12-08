@@ -8,7 +8,7 @@ import java.time.LocalDate;
 @Data
 @Builder
 public class DashboardDTO {
-    // Info General
+    // Informacion General
     private Long idProyecto;
     private String nombreProyecto;
     private String estadoProyecto;
@@ -18,10 +18,10 @@ public class DashboardDTO {
     private Integer avanceGlobal; // 0-100%
     private Long etapasTotales;
     private Long etapasCompletadas;
-    private Long etapasConRetraso; // Semáforo Rojo
+    private Long etapasConRetraso;
 
     // Métricas Financieras
     private BigDecimal presupuestoTotal; // Lo que tiene el proyecto
     private BigDecimal gastoEjecutado;   // Lo que se ha gastado realmente
-    private BigDecimal presupuestoRestante; // Cuánto queda
+    private BigDecimal presupuestoRestante; // Cunto queda
 }

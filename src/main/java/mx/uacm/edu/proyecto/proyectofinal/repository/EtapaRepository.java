@@ -11,21 +11,23 @@ import org.springframework.stereotype.Repository;
 import java.util.List;
 import java.util.Optional;
 
+// Definimos esta interfaz como un Repositorio de Spring para que gestione el acceso a los datos de la entidad Etapa.
 @Repository
 public interface EtapaRepository extends JpaRepository<Etapa, Long> {
 
-    // Validar si existe
+    // Construimos un método para validar si ya existe una etapa con un número de orden específico en un proyecto.
+    // Esto para mantener la integridad y evitar ordenes duplicadas.
     boolean existsByProyectoIdProyectoAndNumeroOrden(Long idProyecto, Integer numeroOrden);
 
-    // RA-04: Reordenamiento Automático
-    // "Mueve todas las etapas hacia abajo  donde el orden sea mayor o igual al que quiero insertar"
-    @Modifying // Indica que es un UPDATE, no un SELECT
+    // Implementamos la Regla de Automatización RA-04 para el reordenamiento.
+    // Cuando insertamos una nueva etapa, necesitamos hacer espacio, esta consulta desplaza todas las etapas posteriores.
+    @Modifying // Marcamos la consulta porque modifica datos es un UPDATE
     @Query("UPDATE Etapa e SET e.numeroOrden = e.numeroOrden + 1 " +
             "WHERE e.proyecto.idProyecto = :idProyecto AND e.numeroOrden >= :ordenNuevo")
     void desplazarOrdenes(@Param("idProyecto") Long idProyecto, @Param("ordenNuevo") Integer ordenNuevo);
 
-    // CASO A: Mover de 5 a 2 (Subir prioridad)
-    // Empujamos las etapas intermedias (2, 3, 4) hacia abajo (+1) para hacer hueco en el 2.
+    // Para el reordenamiento, cubrimos el CASO A: mover una etapa hacia arriba en la lista
+    // Esta consulta empuja las etapas intermedias hacia abajo para abrir el espacio en la nueva posición.
     @Modifying
     @Query("UPDATE Etapa e SET e.numeroOrden = e.numeroOrden + 1 " +
             "WHERE e.proyecto.idProyecto = :idProyecto " +
@@ -34,8 +36,8 @@ public interface EtapaRepository extends JpaRepository<Etapa, Long> {
                                  @Param("nuevoOrden") Integer nuevoOrden,
                                  @Param("ordenActual") Integer ordenActual);
 
-    // CASO B: Mover de 2 a 5 (Bajar prioridad)
-    // Jalamos las etapas intermedias (3, 4, 5) hacia arriba (-1) para tapar el hueco del 2.
+    // cubrimos el CASO B: mover una etapa hacia abajo
+    // Esta consulta jala las etapas intermedias hacia arriba para cerrar el hueco que dejó la etapa movida.
     @Modifying
     @Query("UPDATE Etapa e SET e.numeroOrden = e.numeroOrden - 1 " +
             "WHERE e.proyecto.idProyecto = :idProyecto " +
@@ -44,38 +46,41 @@ public interface EtapaRepository extends JpaRepository<Etapa, Long> {
                                 @Param("nuevoOrden") Integer nuevoOrden,
                                 @Param("ordenActual") Integer ordenActual);
 
-    // RF-02: Buscar por ID de Proyecto y Ordenar por numeroOrden
+    // Para el Requerimiento Funcional RF-02, necesitamos una forma de listar las etapas de un proyecto en su orden correcto.
     List<Etapa> findByProyectoIdProyectoOrderByNumeroOrdenAsc(Long idProyecto);
 
-    // Para RN-03: Contar cuántas actividades tiene una etapa (para dejarla iniciar)
+    // Implementamos la Regla de Negocio RN-03. Antes de permitir que una etapa inicie, verificamos si tiene actividades.
     @Query("SELECT COUNT(a) FROM Actividad a WHERE a.etapa.idEtapa = :idEtapa")
     long contarActividadesPorEtapa(@Param("idEtapa") Long idEtapa);
 
-    // Para RV-05: Contar actividades pendientes (no completadas ni canceladas)
-    // Se usa para bloquear el cierre de la etapa
+    // Para la Regla de Validación RV-05, no podemos cerrar una etapa si aún tiene trabajo pendiente.
+    // Esta consulta cuenta las actividades que no están 'COMPLETADA' o 'CANCELADA'.
     @Query("SELECT COUNT(a) FROM Actividad a WHERE a.etapa.idEtapa = :idEtapa AND a.estado NOT IN ('COMPLETADA', 'CANCELADA')")
     long contarActividadesPendientes(@Param("idEtapa") Long idEtapa);
 
-    // Para RA-05: Verificar si existen etapas NO completadas en un proyecto
-    // Si devuelve true, el proyecto NO puede estar completado.
+    // Para la Regla de Automatización RA-05, el estado de un proyecto depende de sus etapas.
+    // Verificamos si existen etapas que NO estén completadas para decidir si el proyecto puede marcarse como completo.
     boolean existsByProyectoIdProyectoAndEstadoNot(Long idProyecto, EstadoEtapa estado);
 
 
-    // 1. Calcular el promedio de avance de todo el proyecto
+    // Para el Dashboard, necesitamos calcular el avance promedio de un proyecto.
+    // Usamos COALESCE para devolver 0 en lugar de null si un proyecto no tiene etapas.
     @Query("SELECT COALESCE(AVG(e.porcentajeAvance), 0) FROM Etapa e WHERE e.proyecto.idProyecto = :idProyecto")
     Double obtenerPromedioAvance(@Param("idProyecto") Long idProyecto);
 
-    // 2. Contar etapas retrasadas (RA-06: Hoy > FinPlan Y No completada)
+    // También para el Dashboard (RA-06), identificamos etapas con retraso.
+    // Contamos las etapas cuya fecha de fin planificada ya pasó y aún no están completadas.
     @Query("SELECT COUNT(e) FROM Etapa e WHERE e.proyecto.idProyecto = :idProyecto " +
             "AND e.fechaFinPlan < CURRENT_DATE AND e.estado <> 'COMPLETADA'")
     Long contarEtapasAtrasadas(@Param("idProyecto") Long idProyecto);
 
-    // 3. Contar total de etapas
+    // Una consulta simple para obtener el número total de etapas de un proyecto.
     long countByProyectoIdProyecto(Long idProyecto);
 
-    // 4. Contar etapas completadas
+    // Y otra para contar cuántas de esas etapas están en un estado específico (ej. 'COMPLETADA').
     long countByProyectoIdProyectoAndEstado(Long idProyecto, mx.uacm.edu.proyecto.proyectofinal.model.EstadoEtapa estado);
 
-    // Para RA-09: Obtener todas las etapas para promediar avance
+    // Para la Regla de Automatización RA-09, a veces necesitamos todos los objetos Etapa para cálculos más complejos.
+    // Este método nos los proporciona.
     List<Etapa> findByProyectoIdProyecto(Long idProyecto);
 }

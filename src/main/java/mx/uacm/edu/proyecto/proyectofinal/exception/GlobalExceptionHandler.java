@@ -14,19 +14,19 @@ import java.util.Map;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
-    // 1. Manejo de recurso no encontrado (404)
+    // Manejo de recurso no encontrado (404)
     @ExceptionHandler(ResourceNotFoundException.class)
     public ResponseEntity<Map<String, Object>> handleResourceNotFound(ResourceNotFoundException ex) {
         return buildResponse(HttpStatus.NOT_FOUND, ex.getMessage());
     }
 
-    // 2. Manejo de reglas de negocio rotas (400) -  Fechas incoherentes
+    // Manejo de reglas de negocio rotas (400) -  Fechas incoherentes
     @ExceptionHandler({ReglasNegocioException.class, IllegalArgumentException.class, IllegalStateException.class})
     public ResponseEntity<Map<String, Object>> handleBusinessRule(RuntimeException ex) {
         return buildResponse(HttpStatus.BAD_REQUEST, ex.getMessage());
     }
 
-    // 3. Manejo de Validaciones de DTO (@NotNull, @Min) (400)
+    // Manejo de Validaciones de DTO (@NotNull, @Min) (400)
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<Map<String, Object>> handleValidationErrors(MethodArgumentNotValidException ex) {
         Map<String, String> errors = new HashMap<>();
@@ -43,7 +43,7 @@ public class GlobalExceptionHandler {
         return new ResponseEntity<>(response, HttpStatus.BAD_REQUEST);
     }
 
-    // 4. Manejo de Errores de BD (Unique Constraints) (409)
+    // Manejo de Errores de BD (Unique Constraints) (409)
     @ExceptionHandler(DataIntegrityViolationException.class)
     public ResponseEntity<Map<String, Object>> handleDbViolation(DataIntegrityViolationException ex) {
         // Aquí podríamos parsear el mensaje para ser más específicos

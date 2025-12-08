@@ -69,7 +69,6 @@ public class EtapaController {
     /**
      * RF-06: Reordenar Etapa Manualmente
      * Endpoint: PATCH /api/v1/etapas/{idEtapa}/reordenar
-     * Body: { "nuevoOrden": 3 }
      */
     @PatchMapping("/etapas/{idEtapa}/reordenar")
     public ResponseEntity<Void> reordenarEtapa(

@@ -18,7 +18,7 @@ public class PresupuestoController {
 
     /**
      * Actualizar montos de un presupuesto.
-     * Valida RN-07 (No negativos) y RN-09 (Techo del proyecto).
+     * Validamos RN-07 y RN-09.
      * PATCH /api/v1/presupuestos/{idPresupuesto}
      */
     @PatchMapping("/{idPresupuesto}")

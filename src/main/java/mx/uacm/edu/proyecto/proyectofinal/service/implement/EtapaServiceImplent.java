@@ -23,294 +23,251 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.util.List;
 
+// Este servicio se encarga de toda la lógica de negocio relacionada con las Etapas
 @Service
-@RequiredArgsConstructor // Inyección de dependencias por constructor (Lombok)
+@RequiredArgsConstructor // Inyecta las dependencias finales a través del constructor
 public class EtapaServiceImplent implements EtapaService {
 
-    // Repositorios
+    // Dependencias de repositorios para el acceso a datos
     private final EtapaRepository etapaRepository;
     private final ProyectoRepository proyectoRepository;
     private final PresupuestoRepository presupuestoRepository;
     private final ActividadRepository actividadRepository;
 
+    // Dependencia de otros servicios para colaborar
     private final ProyectoService proyectoService;
 
-    // Mapper para conversión de objetos
+    // Mapper para convertir entre DTOs y Entidades
     private final EtapaMapper etapaMapper;
 
     /**
-     * Crea una nueva etapa, valida reglas de negocio, reordena si es necesario
-     * y asigna un presupuesto inicial.
+     * Crea una nueva etapa, aplicando validaciones y asignando un presupuesto inicial
      */
     @Override
-    @Transactional // RNF-01: Garantiza atomicidad (si falla el presupuesto, no se guarda la etapa)
+    @Transactional // RNF-01: Asegura que la operación sea atómica. Si algo falla, se revierte todo
     public EtapaResponseDTO crearEtapa(Long idProyecto, EtapaRequestDTO dto) {
 
-        // 1. RN-01: Validar que el proyecto exista
+        // RN-01: Validamos que el proyecto asociado exista
         Proyecto proyecto = proyectoRepository.findById(idProyecto)
-                .orElseThrow(() -> new ResourceNotFoundException("El proyecto con ID " + idProyecto + " no existe."));
+                .orElseThrow(() -> new ResourceNotFoundException("El proyecto con ID " + idProyecto + " no existe"));
 
-        // 2. RV-02: Validar Coherencia de Fechas
+        // RV-02: Verificamos la coherencia de las fechas
         if (dto.getFechaFinPlan().isBefore(dto.getFechaInicioPlan())) {
-            throw new ReglasNegocioException("Error de Fechas: La fecha de fin planificada no puede ser anterior a la fecha de inicio.");
+            throw new ReglasNegocioException("Error de Fechas: La fecha de fin no puede ser anterior a la de inicio");
         }
 
-        // 3. RN-06: Validar Estado del Proyecto
-        // Normalizamos a mayúsculas para evitar errores por "Cancelado" vs "CANCELADO"
+        //  RN-06: No se deben agregar etapas a proyectos ya finalizados
         String estadoProyecto = proyecto.getEstado().toUpperCase();
         if ("CANCELADO".equals(estadoProyecto) || "CERRADO".equals(estadoProyecto)) {
-            throw new ReglasNegocioException("No se pueden agregar etapas a un proyecto que está " + estadoProyecto);
+            throw new ReglasNegocioException("No se pueden agregar etapas a un proyecto en estado " + estadoProyecto);
         }
 
-        // 4. RA-04: Reordenamiento Automatico en Cascada
-        // Si el usuario intenta insertar en la posición 2 y ya existe la 2, empujamos 2->3, 3->4, etc
+        //  RA-04: Implementamos el reordenamiento automático
+        // Si se intenta insertar en una posición ocupada, desplazamos las etapas existentes
         boolean existeOrden = etapaRepository.existsByProyectoIdProyectoAndNumeroOrden(idProyecto, dto.getNumeroOrden());
-
         if (existeOrden) {
-            // Ejecuta el UPDATE masivo en la BD
             etapaRepository.desplazarOrdenes(idProyecto, dto.getNumeroOrden());
         }
 
-        // 5. Conversión DTO -> Entidad (Usando Mapper)
+        // Convertimos el DTO a una entidad Etapa para guardarla
         Etapa nuevaEtapa = etapaMapper.toEntity(dto, proyecto);
 
-        // 6. Guardado de la Etapa
+        // Persistimos la nueva etapa en la base de datos
         Etapa etapaGuardada = etapaRepository.save(nuevaEtapa);
 
-        // 7. Gestión del Presupuesto Inicial
-        // Validamos si viene nulo para asignar Cero
+        //  Gestionamos el presupuesto inicial de la etapa
         BigDecimal montoInicial = dto.getPresupuestoInicial() != null ? dto.getPresupuestoInicial() : BigDecimal.ZERO;
 
-        // --- INICIO LÓGICA RN-09 (Techo Presupuestal) ---
+        //Lógica para la regla RN-09
         if (montoInicial.compareTo(BigDecimal.ZERO) > 0) {
-            // A. Obtenemos el techo del proyecto
             BigDecimal techoProyecto = proyecto.getPresupuestoTotalObjetivo();
-
-            // B. Obtenemos cuánto llevamos gastado/asignado hasta ahora en las OTRAS etapas
             BigDecimal sumaActual = presupuestoRepository.sumarPresupuestosPorProyecto(idProyecto);
-
-            // C. Calculamos el nuevo total hipotético
             BigDecimal nuevoTotal = sumaActual.add(montoInicial);
 
-            // D. Comparamos
+            // Si el nuevo total supera el límite del proyecto, lanzamos una excepción
             if (nuevoTotal.compareTo(techoProyecto) > 0) {
                 throw new ReglasNegocioException(
-                        String.format("Error RN-09: El presupuesto excede el límite del proyecto. " +
-                                        "Límite: %s, Asignado Actual: %s, Intento: %s",
+                        String.format("Error RN-09: El presupuesto excede el límite del proyecto. Límite: %s, Asignado: %s, Intento: %s",
                                 techoProyecto, sumaActual, montoInicial));
             }
         }
 
-        // Construcción manual del presupuesto
+        // Creamos y guardamos el registro del presupuesto inicial
         Presupuesto presupuestoInicial = Presupuesto.builder()
                 .etapa(etapaGuardada)
                 .montoAprobado(montoInicial)
-                .montoGastado(BigDecimal.ZERO) // Empieza sin gastos
+                .montoGastado(BigDecimal.ZERO)
                 .fechaAprobacion(java.time.LocalDate.now())
                 .estado("ACTIVO")
                 .moneda("MXN")
                 .build();
-
-        // Guardado del Presupuesto
         presupuestoRepository.save(presupuestoInicial);
 
-
-        // Disparar RA-09 y RA-08 (Recálculo global y posible reapertura)
+        // Disparamos RA-09 y RA-08: Recalculamos el estado global del proyecto
         proyectoService.recalcularEstadoProyecto(idProyecto);
 
+        // Devolvemos un DTO con la información de la etapa y su presupuesto
         return etapaMapper.toResponse(etapaGuardada, presupuestoInicial);
-
-
     }
 
     @Override
     @Transactional(readOnly = true)
     public List<EtapaResponseDTO> listarEtapasPorProyecto(Long idProyecto) {
-
-        // 1. RN-01: Validar existencia del proyecto
+        // RN-01: Validamos que el proyecto exista antes de listar sus etapas
         if (!proyectoRepository.existsById(idProyecto)) {
-            throw new ResourceNotFoundException("El proyecto con ID " + idProyecto + " no existe.");
+            throw new ResourceNotFoundException("El proyecto con ID " + idProyecto + " no existe");
         }
 
-        // 2. Obtener entidades ordenadas de la BD
+        // Obtenemos las etapas ordenadas por su número de orden
         List<Etapa> etapas = etapaRepository.findByProyectoIdProyectoOrderByNumeroOrdenAsc(idProyecto);
 
-        // 3. Convertir a DTOs usando el Mapper
+        // Convertimos la lista de entidades a una lista de DTOs para la respuesta
         return etapas.stream()
                 .map(etapaMapper::toResponse)
                 .toList();
     }
+
     @Override
     @Transactional
     public EtapaResponseDTO actualizarEtapa(Long idEtapa, EtapaActualizarDTO dto) {
-
-        // 1. Buscar la etapa
+        // Buscamos la etapa a actualizar
         Etapa etapa = etapaRepository.findById(idEtapa)
                 .orElseThrow(() -> new ResourceNotFoundException("Etapa no encontrada"));
 
-        // 2. Actualizar datos básicos (Nombre/Descripción) si vienen en el DTO
+        // Actualizamos los campos básicos si se proporcionaron en el DTO
         if (dto.getNombre() != null) etapa.setNombre(dto.getNombre());
         if (dto.getDescripcion() != null) etapa.setDescripcion(dto.getDescripcion());
 
-        // 3. MÁQUINA DE ESTADOS (RN-04)
+        // RN-04: Gestionamos la transición de estados si se solicita un cambio
         if (dto.getNuevoEstado() != null && !dto.getNuevoEstado().equals(etapa.getEstado())) {
-
             EstadoEtapa estadoActual = etapa.getEstado();
             EstadoEtapa estadoNuevo = dto.getNuevoEstado();
 
-            validarTransicion(estadoActual, estadoNuevo); // Método auxiliar privado
+            validarTransicion(estadoActual, estadoNuevo); // Usamos un método auxiliar para la lógica de transición
 
-            // Lógica específica por cada transición
+            // Aplicamos reglas específicas para ciertas transiciones
             switch (estadoNuevo) {
                 case EN_PROGRESO:
-                    // RN-03: Debe tener al menos 1 actividad
-                    long totalActividades = etapaRepository.contarActividadesPorEtapa(idEtapa);
-                    if (totalActividades == 0) {
-                        throw new ReglasNegocioException("Error RN-03: No se puede iniciar la etapa sin actividades registradas.");
+                    // RN-03: No se puede iniciar una etapa sin actividades
+                    if (etapaRepository.contarActividadesPorEtapa(idEtapa) == 0) {
+                        throw new ReglasNegocioException("Error RN-03: No se puede iniciar la etapa sin actividades registradas");
                     }
-                    // RA-07: Registrar fecha inicio real automáticamente
+                    // RA-07: Registramos la fecha de inicio real automáticamente
                     if (etapa.getFechaInicioReal() == null) {
                         etapa.setFechaInicioReal(java.time.LocalDate.now());
                     }
                     break;
 
                 case COMPLETADA:
-                    // RN-05: El avance debe ser 100%
+                    // RN-05: El avance debe ser del 100% para completar la etapa
                     if (etapa.getPorcentajeAvance() < 100) {
-                        throw new ReglasNegocioException("Error RN-05: No se puede completar la etapa si el avance es menor al 100%.");
+                        throw new ReglasNegocioException("Error RN-05: No se puede completar la etapa con un avance menor al 100%");
                     }
-                    // RV-05: No puede haber actividades pendientes
+                    // RV-05: No debe haber actividades pendientes
                     long pendientes = etapaRepository.contarActividadesPendientes(idEtapa);
                     if (pendientes > 0) {
-                        throw new ReglasNegocioException("Error RV-05: Existen " + pendientes + " actividades pendientes. Ciérrelas o cancélelas antes de terminar la etapa.");
+                        throw new ReglasNegocioException("Error RV-05: Existen " + pendientes + " actividades pendientes. Deben cerrarse primero");
                     }
-                    // RA-02: Registrar fecha fin real
+                    // RA-02: Registramos la fecha de fin real
                     etapa.setFechaFinReal(java.time.LocalDate.now());
                     break;
-
-                // Casos como CANCELADA o EN_PAUSA son directos, no requieren validación extra aquí
             }
 
-            // Aplicar el cambio
+            // Aplicamos el nuevo estado a la etapa
             etapa.setEstado(estadoNuevo);
         }
 
         Etapa etapaGuardada = etapaRepository.save(etapa);
 
-        // Necesitamos el presupuesto para el mapper
+        // Obtenemos el presupuesto para construir la respuesta completa
         Presupuesto presupuesto = presupuestoRepository.findByEtapaIdEtapa(idEtapa).orElse(null);
 
         return etapaMapper.toResponse(etapaGuardada, presupuesto);
     }
 
     @Override
-    @Transactional // RNF-01: CRÍTICO. Si algo falla, todo vuelve a como estaba.
+    @Transactional // RNF-01: Operación crítica que debe ser atómica
     public void reordenarEtapa(Long idEtapa, Integer nuevoOrden) {
-
-        // 1. Obtener la etapa y datos actuales
-        Etapa etapa = etapaRepository.findById(idEtapa)
+        Etapa etapaMover = etapaRepository.findById(idEtapa)
                 .orElseThrow(() -> new ResourceNotFoundException("Etapa no encontrada"));
 
-        Long idProyecto = etapa.getProyecto().getIdProyecto();
-        Integer ordenActual = etapa.getNumeroOrden();
+        Long idProyecto = etapaMover.getProyecto().getIdProyecto();
+        Integer ordenActual = etapaMover.getNumeroOrden();
 
-        // Validar: Si el orden es el mismo, no hacemos nada
-        if (ordenActual.equals(nuevoOrden)) return;
+        if (ordenActual.equals(nuevoOrden)) return; // No hay nada que hacer
 
-        // Validar: No permitir orden 0 o negativo (excepto nuestro temporal interno)
-        if (nuevoOrden < 1) {
-            throw new ReglasNegocioException("El número de orden debe ser mayor a 0.");
+        // Obtenemos todas las etapas del proyecto
+        List<Etapa> etapas = etapaRepository.findByProyectoIdProyectoOrderByNumeroOrdenAsc(idProyecto);
+
+        // Reordenamos la lista en memoria
+        etapas.removeIf(e -> e.getIdEtapa().equals(idEtapa));
+        int indiceDestino = Math.max(0, Math.min(nuevoOrden - 1, etapas.size()));
+        etapas.add(indiceDestino, etapaMover);
+
+        // Estrategia de reordenamiento seguro para evitar conflictos de constraint
+        // 1. Asignamos números de orden temporales muy altos
+        int temporalBase = 1_000_000;
+        for (int i = 0; i < etapas.size(); i++) {
+            etapas.get(i).setNumeroOrden(temporalBase + i);
         }
+        etapaRepository.saveAllAndFlush(etapas);
 
-        // 2. PASO TÁCTICO: Sacar la etapa de la fila temporalmente
-        // La movemos a -1 para que no estorbe (evitar Duplicate entry error)
-        etapa.setNumeroOrden(-1);
-        etapaRepository.saveAndFlush(etapa); // Flush fuerza el cambio inmediato en BD
-
-        // 3. REACOMODAR VECINAS
-        if (nuevoOrden < ordenActual) {
-            // CASO A: Mover hacia arriba (ej. de 5 a 2)
-            // Las que estaban en 2, 3, 4 pasan a ser 3, 4, 5
-            etapaRepository.empujarEtapasHaciaAbajo(idProyecto, nuevoOrden, ordenActual);
-        } else {
-            // CASO B: Mover hacia abajo (ej. de 2 a 5)
-            // Las que estaban en 3, 4, 5 pasan a ser 2, 3, 4
-            etapaRepository.jalarEtapasHaciaArriba(idProyecto, nuevoOrden, ordenActual);
+        // 2. Asignamos los números de orden finales y correctos
+        for (int i = 0; i < etapas.size(); i++) {
+            etapas.get(i).setNumeroOrden(i + 1);
         }
-
-        // 4. INSERTAR EN DESTINO FINAL
-        // Recuperamos la etapa (que ahora tiene orden -1 en memoria/bd) y la ponemos en su lugar
-        etapa.setNumeroOrden(nuevoOrden);
-        etapaRepository.save(etapa);
+        etapaRepository.saveAll(etapas);
     }
 
     /**
-     * Método Auxiliar para validar RN-04 (Transiciones permitidas)
+     * Método auxiliar para centralizar la lógica de la máquina de estados (RN-04)
      */
     private void validarTransicion(EstadoEtapa actual, EstadoEtapa nuevo) {
-        // Regla: No se puede revivir una etapa finalizada
+        // Una etapa en estado final no puede cambiar
         if (actual == EstadoEtapa.COMPLETADA || actual == EstadoEtapa.CANCELADA) {
-            throw new ReglasNegocioException("Error RN-04: La etapa está en estado final (" + actual + ") y no se puede modificar.");
+            throw new ReglasNegocioException("Error RN-04: La etapa está en un estado final (" + actual + ") y no puede modificarse");
         }
 
-        // Matriz de Transiciones (Simplificada)
         boolean transicionValida = false;
-
         switch (actual) {
             case PLANIFICADA:
-                // Solo puede pasar a EN_PROGRESO o CANCELADA
-                if (nuevo == EstadoEtapa.EN_PROGRESO || nuevo == EstadoEtapa.CANCELADA) transicionValida = true;
+                transicionValida = (nuevo == EstadoEtapa.EN_PROGRESO || nuevo == EstadoEtapa.CANCELADA);
                 break;
             case EN_PROGRESO:
-                // Puede pausarse, completarse o cancelarse
-                if (nuevo == EstadoEtapa.EN_PAUSA || nuevo == EstadoEtapa.COMPLETADA || nuevo == EstadoEtapa.CANCELADA) transicionValida = true;
+                transicionValida = (nuevo == EstadoEtapa.EN_PAUSA || nuevo == EstadoEtapa.COMPLETADA || nuevo == EstadoEtapa.CANCELADA);
                 break;
             case EN_PAUSA:
-                // Solo puede volver a EN_PROGRESO
-                if (nuevo == EstadoEtapa.EN_PROGRESO) transicionValida = true;
-                break;
-            default:
+                transicionValida = (nuevo == EstadoEtapa.EN_PROGRESO);
                 break;
         }
 
         if (!transicionValida) {
-            throw new ReglasNegocioException("Error RN-04: Transición de estado inválida: De " + actual + " a " + nuevo);
+            throw new ReglasNegocioException("Error RN-04: Transición de estado no permitida de " + actual + " a " + nuevo);
         }
     }
 
     @Override
     @Transactional
     public void eliminarEtapa(Long idEtapa) {
-
-        // 1. Verificar existencia
         Etapa etapa = etapaRepository.findById(idEtapa)
                 .orElseThrow(() -> new ResourceNotFoundException("Etapa no encontrada"));
 
-        // 2. RV-04 (Parte A): Validar si tiene actividades
+        // RV-04 (Parte A): No se puede eliminar si tiene actividades
         if (actividadRepository.existsByEtapaIdEtapa(idEtapa)) {
-            throw new ReglasNegocioException("Error RV-04: No se puede eliminar la etapa porque tiene actividades asociadas. Elimínelas primero.");
+            throw new ReglasNegocioException("Error RV-04: No se puede eliminar la etapa porque tiene actividades asociadas");
         }
 
-        // 3. RV-04 (Parte B): Validar si tiene presupuesto EJECUTADO
-        // Nota: Permitimos borrar si el gastado es 0 (porque el sistema crea uno automático al inicio)
-        boolean tieneGastos = presupuestoRepository.existsByEtapaIdEtapaAndMontoGastadoGreaterThan(idEtapa, BigDecimal.ZERO);
-
-        if (tieneGastos) {
-            throw new ReglasNegocioException("Error RV-04: No se puede eliminar la etapa porque ya tiene ejecución presupuestal (Dinero gastado).");
+        // RV-04 (Parte B): No se puede eliminar si ya tiene gastos registrados
+        if (presupuestoRepository.existsByEtapaIdEtapaAndMontoGastadoGreaterThan(idEtapa, BigDecimal.ZERO)) {
+            throw new ReglasNegocioException("Error RV-04: No se puede eliminar la etapa porque tiene gastos ejecutados");
         }
 
-        // 4. Capturar ID del proyecto antes de borrar (para el recálculo)
         Long idProyecto = etapa.getProyecto().getIdProyecto();
 
-        // 5. BORRADO
-        // Gracias a CascadeType.ALL en la entidad Etapa, esto borrará también el presupuesto asociado (que está en 0)
+        // La configuración de CascadeType.ALL se encargará de eliminar el presupuesto asociado
         etapaRepository.delete(etapa);
 
-        // 6. RA-09: Recalcular el estado del proyecto
-        // (Al borrar una etapa, el promedio del proyecto cambia)
+        // RA-09: Recalculamos el estado del proyecto, ya que la eliminación de una etapa afecta el promedio
         proyectoService.recalcularEstadoProyecto(idProyecto);
-
-        // Opcional: Aquí podrías llamar a un método "compactarOrdenes(idProyecto)"
-        // para que si borras la 2, la 3 se vuelva 2. (Lo veremos en el siguiente paso de Reordenamiento).
     }
 }

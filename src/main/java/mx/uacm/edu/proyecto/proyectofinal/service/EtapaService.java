@@ -14,12 +14,12 @@ public interface EtapaService {
     // RF-02: Listar etapas
     List<EtapaResponseDTO> listarEtapasPorProyecto(Long idProyecto);
 
-    // RF-04: Actualizar etapa (Datos generales o Cambio de Estado)
+    // RF-04: Actualizar etapa (Datos generales o Cambio de Estado
     EtapaResponseDTO actualizarEtapa(Long idEtapa, EtapaActualizarDTO dto);
 
     // RF-06: Reordenar etapa manual
     void reordenarEtapa(Long idEtapa, Integer nuevoOrden);
 
-    // RF-07: Eliminar etapa (Solo si cumple RV-04)
+    // RF-07: Eliminar etapa solo si cumple RV-04
     void eliminarEtapa(Long idEtapa);
 }

@@ -19,7 +19,12 @@ public class ActividadController {
 
     private final ActividadService actividadService;
 
-    // 1. Crear Actividad en una Etapa
+    /**
+     * Endpoint: POST /api/v1/etapas/{idEtapa}/actividades
+     * @param idEtapa El ID de la etapa donde se agregara la actividad.
+     * @param dto El JSON con los datos de la actividad (Nombre, Fechas, Orden).
+     * @return 201 Created con la actividad creada.
+     */
     @PostMapping("/etapas/{idEtapa}/actividades")
     public ResponseEntity<Actividad> crearActividad(
             @PathVariable Long idEtapa,
@@ -29,13 +34,22 @@ public class ActividadController {
         return new ResponseEntity<>(nueva, HttpStatus.CREATED);
     }
 
-    // 2. Listar Actividades de una Etapa
+    /**
+     * Endpoint: GET /api/v1/etapas/{idEtapa}/actividades
+     * @param idEtapa El ID de la etapa de la que se listaran las actividades.
+     * @return 200 OK con la lista de actividades.
+     */
     @GetMapping("/etapas/{idEtapa}/actividades")
     public ResponseEntity<List<Actividad>> listarActividades(@PathVariable Long idEtapa) {
         return ResponseEntity.ok(actividadService.listarPorEtapa(idEtapa));
     }
 
-    // 3. Actualizar Avance (¡El más importante!)
+    /**
+     * Endpoint: PATCH /api/v1/actividades/{idActividad}/avance
+     * @param idActividad El ID de la actividad que se actualizara.
+     * @param dto El JSON con el nuevo avance de la actividad.
+     * @return 200 OK con la actividad actualizada.
+     */
     @PatchMapping("/actividades/{idActividad}/avance")
     public ResponseEntity<Actividad> actualizarAvance(
             @PathVariable Long idActividad,
@@ -45,7 +59,11 @@ public class ActividadController {
         return ResponseEntity.ok(actualizada);
     }
 
-    // 4. Eliminar Actividad
+    /**
+     * Endpoint: DELETE /api/v1/actividades/{idActividad}
+     * @param idActividad El ID de la actividad que se eliminara.
+     * @return 204 No Content.
+     */
     @DeleteMapping("/actividades/{idActividad}")
     public ResponseEntity<Void> eliminarActividad(@PathVariable Long idActividad) {
         actividadService.eliminarActividad(idActividad);

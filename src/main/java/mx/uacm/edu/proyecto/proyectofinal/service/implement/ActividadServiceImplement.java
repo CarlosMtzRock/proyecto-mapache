@@ -19,31 +19,35 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDate;
 import java.util.List;
 
+// aqui es donde pasa la magia de las actividades
 @Service
 @RequiredArgsConstructor
 public class ActividadServiceImplement implements ActividadService {
 
+    // nos traemos las herramientas que vamos a necesitar
     private final ActividadRepository actividadRepository;
     private final EtapaRepository etapaRepository;
     private final ActividadMapper actividadMapper;
-
-    private final ProyectoService proyectoService; // <--- Inyectar
+    private final ProyectoService proyectoService;
 
     @Override
     @Transactional
     public Actividad crearActividad(Long idEtapa, ActividadRequestDTO dto) {
+        // buscamos la etapa o si no, la quitamos
         Etapa etapa = etapaRepository.findById(idEtapa)
                 .orElseThrow(() -> new ResourceNotFoundException("Etapa no encontrada"));
 
-        // Regla: No agregar actividades a etapas cerradas
+        // regla de oro: no puedes meterle cosas a una etapa ya muerta
         if(etapa.getEstado() == EstadoEtapa.COMPLETADA || etapa.getEstado() == EstadoEtapa.CANCELADA){
-            throw new ReglasNegocioException("No se pueden agregar actividades a una etapa terminada.");
+            throw new ReglasNegocioException("No se pueden agregar actividades a una etapa terminada");
         }
 
+        // usamos el mapper para convertir el dto a la entidad chida
         Actividad actividad = actividadMapper.toEntity(dto, etapa);
+        // y la guardamos en la base de datos
         Actividad guardada = actividadRepository.save(actividad);
 
-        // Importante: Al agregar una nueva actividad (con 0%), el promedio de la etapa baja.
+        // ojo, al meter una actividad nueva (en 0%) el promedio de la etapa baja, asi que a recalcular
         recalcularAvanceEtapa(etapa);
 
         return guardada;
@@ -52,87 +56,97 @@ public class ActividadServiceImplement implements ActividadService {
     @Override
     @Transactional
     public Actividad actualizarAvance(Long idActividad, ActividadAvanceDTO dto) {
-        // 1. Obtener actividad
+        // 1 primero encontramos la actividad que vamos a moverle
         Actividad actividad = actividadRepository.findById(idActividad)
                 .orElseThrow(() -> new ResourceNotFoundException("Actividad no encontrada"));
 
-        // 2. Actualizar el propio avance
+        // 2 le actualizamos el avance con lo que nos mandaron
         actividad.setPorcentajeAvance(dto.getNuevoAvance());
 
-        // Lógica de estado de la actividad
+        // ahora viene la magia de los estados
         if (dto.getNuevoAvance() == 100) {
+            // si ya llego al 100, la marcamos como completada y le ponemos fecha de hoy
             actividad.setEstado("COMPLETADA");
             actividad.setFechaFinReal(LocalDate.now());
         } else if (dto.getNuevoAvance() > 0) {
+            // si apenas empezo (mas de 0), la ponemos en progreso y si no tenia fecha de inicio, se la clavamos
             actividad.setEstado("EN_PROGRESO");
             if (actividad.getFechaInicioReal() == null) {
                 actividad.setFechaInicioReal(LocalDate.now());
             }
         }
 
+        // guardamos los cambios en la base de datos
         Actividad actualizada = actividadRepository.save(actividad);
 
-        // 3. EFECTO DOMINÓ: Recalcular Etapa (RA-02 y Recálculo de Avance)
+        // 3 EFECTO DOMINO: esto mueve todo pa arriba, recalculamos la etapa (RA-02)
         recalcularAvanceEtapa(actividad.getEtapa());
 
         return actualizada;
     }
 
-    // Método Privado para la Lógica de la Etapa
+    // este metodo privado se encarga de recalcular todo lo de la etapa
     private void recalcularAvanceEtapa(Etapa etapa) {
+        // traemos todas las actividades de la etapa para hacer cuentas
         List<Actividad> actividades = actividadRepository.findByEtapaIdEtapa(etapa.getIdEtapa());
 
+        // si no hay actividades, pues no hacemos nada
         if (actividades.isEmpty()) return;
 
-        // A. Calcular Promedio
+        // A a calcular el promedio de avance
         double sumaAvance = actividades.stream()
                 .mapToInt(Actividad::getPorcentajeAvance)
                 .sum();
 
+        // y sacamos el promedio nuevo para la etapa
         int nuevoPromedioEtapa = (int) (sumaAvance / actividades.size());
 
-        // B. Actualizar Etapa
+        // B actualizamos el porcentaje de la etapa
         etapa.setPorcentajeAvance(nuevoPromedioEtapa);
 
-        // C. RA-02: Auto-Completado
+        // C RA-02: Auto-Completado, si la etapa ya llego al 100
         if (nuevoPromedioEtapa == 100) {
-            // Solo si no estaba ya completada (para no sobrescribir fecha fin real)
+            // solo si no estaba ya completada, pa no pisar la fecha fin real
             if (etapa.getEstado() != EstadoEtapa.COMPLETADA) {
                 etapa.setEstado(EstadoEtapa.COMPLETADA);
                 etapa.setFechaFinReal(LocalDate.now());
             }
         } else {
-            // Si por error se reabrió una tarea, la etapa debe dejar de estar completada
+            // si por alguna razon bajo del 100 (alguien reabrio una tarea), le quitamos el estado de completada
             if (etapa.getEstado() == EstadoEtapa.COMPLETADA) {
                 etapa.setEstado(EstadoEtapa.EN_PROGRESO);
                 etapa.setFechaFinReal(null);
             }
         }
 
+        // guardamos los cambios de la etapa
         etapaRepository.save(etapa);
 
-        // Propagar el cambio hacia arriba (Hacia el Proyecto)
-        // Esto dispara RA-05 (Si la etapa se cerró, checa si el proyecto se cierra)
+        // y ahora el cambio va pa'rriba, al proyecto
+        // esto dispara RA-05 (Si la etapa se cerro, checa si el proyecto se cierra)
         proyectoService.recalcularEstadoProyecto(etapa.getProyecto().getIdProyecto());
     }
 
-    // listar y eliminar
+    // estos son mas sencillos, solo para listar y borrar
     @Override
     public List<Actividad> listarPorEtapa(Long idEtapa) {
+        // este es facil, solo pedimos al repo la lista de actividades de la etapa y ya
         return actividadRepository.findByEtapaIdEtapa(idEtapa);
     }
 
     @Override
     public void eliminarActividad(Long idActividad) {
+        // buscamos la actividad que quieren borrar, si no existe, error
         Actividad act = actividadRepository.findById(idActividad)
                 .orElseThrow(()-> new ResourceNotFoundException("Actividad no encontrada"));
 
-        // Antes de borrar, guardamos la referencia a la etapa para recalcular después
+        // antes de que truene, guardamos la etapa pa poder recalcular despues
         Etapa etapa = act.getEtapa();
 
+        // ahora si, adios actividad
         actividadRepository.delete(act);
 
-        // Al borrar, el promedio cambia (sube), hay que recalcular
+        // como borramos una, el promedio cambia (chance y sube), asi que a recalcular todo
         recalcularAvanceEtapa(etapa);
     }
 }

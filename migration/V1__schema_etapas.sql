@@ -1,7 +1,7 @@
 -- 1. TABLA: PROYECTO
 CREATE TABLE proyecto (
                           id_proyecto BIGINT AUTO_INCREMENT PRIMARY KEY,
-                          id_cliente BIGINT NOT NULL, -- Referencia lógica (sin FK física por ahora)
+                          id_cliente BIGINT NOT NULL,
                           nombre VARCHAR(255) NOT NULL,
                           descripcion TEXT,
                           metodologia VARCHAR(50),
@@ -89,7 +89,6 @@ CREATE TABLE actividad (
                            CONSTRAINT chk_actividad_fechas_prog CHECK (fecha_fin_prog IS NULL OR fecha_fin_prog >= fecha_inicio_prog)
 ) ENGINE=InnoDB;
 
--- 5. ÍNDICES (Opcional, pero recomendado)
 CREATE INDEX idx_etapa_proyecto ON etapa(id_proyecto);
 CREATE INDEX idx_presupuesto_etapa ON presupuesto(id_etapa);
 CREATE INDEX idx_actividad_etapa ON actividad(id_etapa);

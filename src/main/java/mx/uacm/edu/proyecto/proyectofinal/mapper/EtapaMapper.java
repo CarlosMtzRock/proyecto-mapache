@@ -31,14 +31,14 @@ public class EtapaMapper {
                 .build();
     }
 
-    // Versión 1: Cuando recibimos Etapa + Presupuesto específico
+    // Cuando recibimos Etapa mas Presupuesto específico
     public EtapaResponseDTO toResponse(Etapa etapa, Presupuesto presupuesto) {
         return buildResponse(etapa,
                 presupuesto != null ? presupuesto.getMontoAprobado() : BigDecimal.ZERO,
                 presupuesto != null ? presupuesto.getMontoGastado() : BigDecimal.ZERO);
     }
 
-    // Versión 2: Cuando recibimos solo Etapa (lista) y sumamos sus presupuestos
+    //Cuando recibimos solo Etapa  y sumamos sus presupuestos
     public EtapaResponseDTO toResponse(Etapa etapa) {
         BigDecimal totalAsignado = BigDecimal.ZERO;
         BigDecimal totalGastado = BigDecimal.ZERO;
