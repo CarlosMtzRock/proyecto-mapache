@@ -77,16 +77,16 @@ src/main/java/mx.uacm.edu.proyectofinal
 ## 🛠️ Tecnologías Utilizadas
 
 ```
-| Tecnología        | Propósito                         |
-|-------------------|-----------------------------------|
-| **Java 17+**      | Lenguaje de programación          |
-| **Spring Boot**   | Framework principal                |
-| **Spring Data JPA** | Persistencia y ORM               |
-| **Spring Web**    | Creación de API REST              |
-| **Flyway**        | Migraciones de base de datos       |
-| **MariaDB**       | Motor de base de datos             |
-| **Lombok**        | Reducción de código repetitivo     |
-| **Maven**         | Gestión de dependencias            |
+| Tecnología              | Propósito                         |
+|-------------------------|-----------------------------------|
+| **Java 17**             | Lenguaje de programación          |
+| **Spring Boot 3.2.6**   | Framework principal               |
+| **Spring Data JPA**     | Persistencia y ORM                |
+| **Spring Web**          | Creación de API REST              |
+| **Flyway**              | Migraciones de base de datos      |
+| **MariaDB**             | Motor de base de datos            |
+| **Lombok**              | Reducción de código repetitivo    |
+| **Maven**               | Gestión de dependencias           |
 
 ```
 
@@ -103,7 +103,7 @@ El proyecto utiliza **Flyway** para la gestión de versiones del esquema de la b
 # ==============================
 #   CONEXIÓN A BASE DE DATOS
 # ==============================
-spring.datasource.url=jdbc:mariadb://localhost:3306/etapasbd
+spring.datasource.url=jdbc:mariadb://localhost:3306/etapasdb
 spring.datasource.username=usuario
 spring.datasource.password=contraseña
 spring.datasource.driver-class-name=org.mariadb.jdbc.Driver
@@ -120,8 +120,9 @@ spring.jpa.properties.hibernate.format_sql=true
 spring.flyway.enabled=true
 spring.flyway.locations=classpath:db/migration
 
-# Si la BD ya existía con tablas previas, evita errores al iniciar
-spring.flyway.baseline-on-migrate=true
+spring.flyway.url=${spring.datasource.url}
+spring.flyway.user=${spring.datasource.username}
+spring.flyway.password=${spring.datasource.password}
 
 ```
 **Migraciones Flyway**
@@ -146,7 +147,7 @@ Los archivos deben estar en:
 ```
 ## ▶️ Ejecución del Proyecto
 Prerrequisitos
-Java 17 o superior
+Java 17
 
 Maven
 
@@ -162,6 +163,6 @@ cd administracion-etapas
 Ingresa a tu cliente de MariaDB y crea una base de datos con el nombre:
 
 
-*etapasbd;*
+*etapasdb;*
 
 Paso 3: Ejecutar la aplicación
