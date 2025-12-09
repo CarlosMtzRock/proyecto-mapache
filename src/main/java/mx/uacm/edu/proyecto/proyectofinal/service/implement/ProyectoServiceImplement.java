@@ -4,6 +4,7 @@ import lombok.RequiredArgsConstructor;
 import mx.uacm.edu.proyecto.proyectofinal.dto.DashboardDTO;
 import mx.uacm.edu.proyecto.proyectofinal.dto.ProyectoRequestDTO;
 import mx.uacm.edu.proyecto.proyectofinal.dto.ProyectoResponseDTO;
+import mx.uacm.edu.proyecto.proyectofinal.dto.ProyectoUpdateDTO;
 import mx.uacm.edu.proyecto.proyectofinal.exception.ResourceNotFoundException;
 import mx.uacm.edu.proyecto.proyectofinal.mapper.ProyectoMapper;
 import mx.uacm.edu.proyecto.proyectofinal.model.Etapa;
@@ -68,11 +69,31 @@ public class ProyectoServiceImplement implements ProyectoService {
 
     @Override
     @Transactional
+    public ProyectoResponseDTO actualizarParcialmenteProyecto(Long id, ProyectoUpdateDTO dto) {
+        Proyecto proyecto = proyectoRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Proyecto no encontrado con ID: " + id));
+
+        // Logica de actualizacion parcial: solo se actualiza si el campo no es nulo
+        if (dto.getIdCliente() != null) proyecto.setIdCliente(dto.getIdCliente());
+        if (dto.getNombre() != null) proyecto.setNombre(dto.getNombre());
+        if (dto.getDescripcion() != null) proyecto.setDescripcion(dto.getDescripcion());
+        if (dto.getMetodologia() != null) proyecto.setMetodologia(dto.getMetodologia());
+        if (dto.getTipo() != null) proyecto.setTipo(dto.getTipo());
+        if (dto.getPrioridad() != null) proyecto.setPrioridad(dto.getPrioridad());
+        if (dto.getFechaInicio() != null) proyecto.setFechaInicio(dto.getFechaInicio());
+        if (dto.getFechaFinEstimada() != null) proyecto.setFechaFinEstimada(dto.getFechaFinEstimada());
+        if (dto.getPresupuestoTotalObjetivo() != null) proyecto.setPresupuestoTotalObjetivo(dto.getPresupuestoTotalObjetivo());
+        if (dto.getEstado() != null) proyecto.setEstado(dto.getEstado());
+
+        Proyecto proyectoActualizado = proyectoRepository.save(proyecto);
+        return proyectoMapper.toResponse(proyectoActualizado);
+    }
+
+    @Override
+    @Transactional
     public void eliminarProyecto(Long id) {
         Proyecto proyecto = proyectoRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Proyecto no encontrado con ID: " + id));
-        
-        // Opcional: Agregar validaciones antes de borrar. Por ejemplo, no borrar si tiene etapas.
         
         proyectoRepository.delete(proyecto);
     }

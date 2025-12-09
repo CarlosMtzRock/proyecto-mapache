@@ -21,6 +21,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.List;
 
 @Service
@@ -121,23 +122,46 @@ public class EtapaServiceImplent implements EtapaService {
 
             validarTransicion(estadoActual, estadoNuevo);
 
+            // Validaciones especificas para cuando se intenta iniciar una etapa
+            if (estadoNuevo == EstadoEtapa.EN_PROGRESO) {
+                // Validacion para RN6
+                String estadoProyecto = etapa.getProyecto().getEstado().toUpperCase();
+                if (!"EN_PROGRESO".equals(estadoProyecto)) {
+                    throw new ReglasNegocioException(
+                        "Error RN-06: No se puede iniciar la etapa porque el proyecto esta en estado '" + estadoProyecto + "'."
+                    );
+                }
+                // Validacion para RN8
+                LocalDate limiteInferior = etapa.getFechaInicioPlan().minusDays(7);
+                if (LocalDate.now().isBefore(limiteInferior)) {
+                    throw new ReglasNegocioException(
+                        "Error RN-08: No se puede iniciar la etapa. La fecha actual es mas de 7 dias anterior a la fecha planificada (" + etapa.getFechaInicioPlan() + ")"
+                    );
+                }
+            }
+
             switch (estadoNuevo) {
                 case EN_PROGRESO:
+                    // Validacion para RN3
                     if (etapaRepository.contarActividadesPorEtapa(idEtapa) == 0) {
                         throw new ReglasNegocioException("Error RN-03: No se puede iniciar la etapa sin actividades registradas");
                     }
+                    // Regla Automatica RA7
                     if (etapa.getFechaInicioReal() == null) {
                         etapa.setFechaInicioReal(java.time.LocalDate.now());
                     }
                     break;
                 case COMPLETADA:
+                    // Validacion para RN5
                     if (etapa.getPorcentajeAvance() < 100) {
                         throw new ReglasNegocioException("Error RN-05: No se puede completar la etapa con un avance menor al 100%");
                     }
+                    // Validacion para RV5
                     long pendientes = etapaRepository.contarActividadesPendientes(idEtapa);
                     if (pendientes > 0) {
                         throw new ReglasNegocioException("Error RV-05: Existen " + pendientes + " actividades pendientes. Deben cerrarse primero");
                     }
+                    // Regla Automatica RA2 (parcial)
                     etapa.setFechaFinReal(java.time.LocalDate.now());
                     break;
             }
