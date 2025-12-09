@@ -2,6 +2,8 @@ package mx.uacm.edu.proyecto.proyectofinal.service.implement;
 
 import lombok.RequiredArgsConstructor;
 import mx.uacm.edu.proyecto.proyectofinal.dto.DashboardDTO;
+import mx.uacm.edu.proyecto.proyectofinal.dto.ProyectoRequestDTO;
+import mx.uacm.edu.proyecto.proyectofinal.dto.ProyectoResponseDTO;
 import mx.uacm.edu.proyecto.proyectofinal.exception.ResourceNotFoundException;
 import mx.uacm.edu.proyecto.proyectofinal.mapper.ProyectoMapper;
 import mx.uacm.edu.proyecto.proyectofinal.model.Etapa;
@@ -17,13 +19,12 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.stream.Collectors;
 
-// Este servicio se encarga de la logica de negocio a nivel de Proyecto
 @Service
 @RequiredArgsConstructor
 public class ProyectoServiceImplement implements ProyectoService {
 
-    // Inyectamos los repositorios y mappers que necesitamos
     private final ProyectoRepository proyectoRepository;
     private final EtapaRepository etapaRepository;
     private final PresupuestoRepository presupuestoRepository;
@@ -31,81 +32,105 @@ public class ProyectoServiceImplement implements ProyectoService {
 
     @Override
     @Transactional
+    public ProyectoResponseDTO crearProyecto(ProyectoRequestDTO proyectoRequestDTO) {
+        Proyecto proyecto = proyectoMapper.toEntity(proyectoRequestDTO);
+        Proyecto proyectoGuardado = proyectoRepository.save(proyecto);
+        return proyectoMapper.toResponse(proyectoGuardado);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<ProyectoResponseDTO> obtenerTodosLosProyectos() {
+        return proyectoRepository.findAll().stream()
+                .map(proyectoMapper::toResponse)
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public ProyectoResponseDTO obtenerProyectoPorId(Long id) {
+        Proyecto proyecto = proyectoRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Proyecto no encontrado con ID: " + id));
+        return proyectoMapper.toResponse(proyecto);
+    }
+
+    @Override
+    @Transactional
+    public ProyectoResponseDTO actualizarProyecto(Long id, ProyectoRequestDTO proyectoRequestDTO) {
+        Proyecto proyecto = proyectoRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Proyecto no encontrado con ID: " + id));
+        
+        proyectoMapper.updateEntity(proyectoRequestDTO, proyecto);
+        
+        Proyecto proyectoActualizado = proyectoRepository.save(proyecto);
+        return proyectoMapper.toResponse(proyectoActualizado);
+    }
+
+    @Override
+    @Transactional
+    public void eliminarProyecto(Long id) {
+        Proyecto proyecto = proyectoRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Proyecto no encontrado con ID: " + id));
+        
+        // Opcional: Agregar validaciones antes de borrar. Por ejemplo, no borrar si tiene etapas.
+        
+        proyectoRepository.delete(proyecto);
+    }
+
+    @Override
+    @Transactional
     public void recalcularEstadoProyecto(Long idProyecto) {
-        // Buscamos el proyecto que vamos a recalcular
         Proyecto proyecto = proyectoRepository.findById(idProyecto)
                 .orElseThrow(() -> new ResourceNotFoundException("Proyecto no encontrado"));
 
-        // Obtenemos todas sus etapas para hacer los calculos
         List<Etapa> etapas = etapaRepository.findByProyectoIdProyecto(idProyecto);
 
-        // Si no hay etapas, no hay nada que calcular
         if (etapas.isEmpty()) {
             return;
         }
 
-        // RA-09: Recalculamos el avance global del proyecto
-        // Usamos un promedio simple del avance de todas las etapas
         double sumaAvance = etapas.stream().mapToInt(Etapa::getPorcentajeAvance).sum();
         int promedioGlobal = (int) (sumaAvance / etapas.size());
 
-        // Aqui actualizariamos un campo 'porcentajeAvance' en la entidad Proyecto si existiera
-        // proyecto.setPorcentajeAvance(promedioGlobal);
-
-        // RA-05 y RA-08: Gestionamos el estado del proyecto automaticamente
-        // Verificamos si todavia hay etapas pendientes (que no esten completadas o canceladas)
         boolean hayPendientes = etapas.stream()
                 .anyMatch(e -> e.getEstado() != EstadoEtapa.COMPLETADA && e.getEstado() != EstadoEtapa.CANCELADA);
 
         if (!hayPendientes) {
-            // RA-05: Si no hay pendientes, significa que todo termino, asi que cerramos el proyecto
             if (!"COMPLETADO".equals(proyecto.getEstado())) {
                 proyecto.setEstado("COMPLETADO");
                 proyecto.setFechaFinReal(LocalDate.now());
             }
         } else {
-            // RA-08: Si hay pendientes, el proyecto debe estar activo
-            // Esto es util si un proyecto ya estaba 'COMPLETADO' y se le agrega una nueva etapa
             if ("COMPLETADO".equals(proyecto.getEstado())) {
                 proyecto.setEstado("EN_PROGRESO");
-                proyecto.setFechaFinReal(null); // Limpiamos la fecha de fin porque se reabrio
+                proyecto.setFechaFinReal(null);
             }
         }
 
-        // Guardamos los cambios en el estado del proyecto
         proyectoRepository.save(proyecto);
     }
 
     @Override
-    @Transactional(readOnly = true) // Marcamos como solo lectura para optimizar la consulta
+    @Transactional(readOnly = true)
     public DashboardDTO obtenerDashboard(Long idProyecto) {
-
-        // 1. Obtenemos la entidad principal del proyecto
         Proyecto proyecto = proyectoRepository.findById(idProyecto)
                 .orElseThrow(() -> new ResourceNotFoundException("Proyecto no encontrado"));
 
-        // 2. Obtenemos metricas relacionadas con las etapas (tiempo y cantidad)
         Double promedioAvance = etapaRepository.obtenerPromedioAvance(idProyecto);
         Long totalEtapas = etapaRepository.countByProyectoIdProyecto(idProyecto);
         Long etapasCompletadas = etapaRepository.countByProyectoIdProyectoAndEstado(idProyecto, EstadoEtapa.COMPLETADA);
         Long etapasAtrasadas = etapaRepository.contarEtapasAtrasadas(idProyecto);
-
-        // 3. Obtenemos metricas financieras (dinero)
         BigDecimal gastoTotal = presupuestoRepository.sumarGastoRealPorProyecto(idProyecto);
 
-        // 4. Construimos el DTO del Dashboard con toda la informacion recolectada
-        // Usamos el patron Builder para que el codigo sea mas legible
         return DashboardDTO.builder()
                 .idProyecto(proyecto.getIdProyecto())
                 .nombreProyecto(proyecto.getNombre())
                 .estadoProyecto(proyecto.getEstado())
                 .fechaFinEstimada(proyecto.getFechaFinEstimada())
-                // Metricas de avance
-                .avanceGlobal(promedioAvance.intValue()) // Convertimos el double a un entero para el porcentaje
+                .avanceGlobal(promedioAvance.intValue())
                 .etapasTotales(totalEtapas)
                 .etapasCompletadas(etapasCompletadas)
                 .etapasConRetraso(etapasAtrasadas)
-                // Metricas de finanzas
                 .presupuestoTotal(proyecto.getPresupuestoTotalObjetivo())
                 .gastoEjecutado(gastoTotal)
                 .presupuestoRestante(proyecto.getPresupuestoTotalObjetivo().subtract(gastoTotal))
