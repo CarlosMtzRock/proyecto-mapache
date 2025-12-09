@@ -1,32 +1,52 @@
 package mx.uacm.edu.proyecto.proyectofinal.mapper;
 
 import mx.uacm.edu.proyecto.proyectofinal.dto.ActividadRequestDTO;
+import mx.uacm.edu.proyecto.proyectofinal.dto.ActividadResponseDTO;
 import mx.uacm.edu.proyecto.proyectofinal.model.Actividad;
 import mx.uacm.edu.proyecto.proyectofinal.model.Etapa;
 import org.springframework.stereotype.Component;
 
-// Declara esta clase como un componente de Spring para que pueda ser inyectada en otras clases.
 @Component
 public class ActividadMapper {
 
-    // Convierte un DTO y una entidad Etapa a una entidad Actividad.
+    // Convierte un DTO de peticion a una Entidad para crear una nueva actividad
     public Actividad toEntity(ActividadRequestDTO dto, Etapa etapa) {
-        // Utiliza el patrón de diseño Builder para construir el objeto Actividad.
         return Actividad.builder()
-                // Asigna la etapa a la que pertenece la actividad.
                 .etapa(etapa)
-                // Mapea los datos del DTO a la entidad.
                 .nombre(dto.getNombre())
                 .tipo(dto.getTipo())
                 .idRequisito(dto.getIdRequisito())
                 .fechaInicioProg(dto.getFechaInicioProg())
                 .fechaFinProg(dto.getFechaFinProg())
-                // Si el porcentaje de avance es nulo, lo establece en 0.
                 .porcentajeAvance(dto.getPorcentajeAvance() != null ? dto.getPorcentajeAvance() : 0)
-                // Establece el estado inicial de la actividad como "PENDIENTE".
-                .estado("PENDIENTE") 
-                // Construye y devuelve el objeto Actividad.
+                .estado("PENDIENTE")
                 .build();
     }
 
+    // Convierte una Entidad a un DTO de respuesta
+    public ActividadResponseDTO toResponse(Actividad entity) {
+        ActividadResponseDTO dto = new ActividadResponseDTO();
+        dto.setIdActividad(entity.getIdActividad());
+        dto.setIdEtapa(entity.getEtapa().getIdEtapa());
+        dto.setIdRequisito(entity.getIdRequisito());
+        dto.setNombre(entity.getNombre());
+        dto.setTipo(entity.getTipo());
+        dto.setFechaInicioProg(entity.getFechaInicioProg());
+        dto.setFechaFinProg(entity.getFechaFinProg());
+        dto.setFechaInicioReal(entity.getFechaInicioReal());
+        dto.setFechaFinReal(entity.getFechaFinReal());
+        dto.setPorcentajeAvance(entity.getPorcentajeAvance());
+        dto.setEstado(entity.getEstado());
+        return dto;
+    }
+
+    // Actualiza una entidad existente con datos de un DTO de peticion
+    public void updateEntity(ActividadRequestDTO dto, Actividad entity) {
+        entity.setNombre(dto.getNombre());
+        entity.setTipo(dto.getTipo());
+        entity.setIdRequisito(dto.getIdRequisito());
+        entity.setFechaInicioProg(dto.getFechaInicioProg());
+        entity.setFechaFinProg(dto.getFechaFinProg());
+
+    }
 }

@@ -1,13 +1,16 @@
 package mx.uacm.edu.proyecto.proyectofinal.service;
 
-import mx.uacm.edu.proyecto.proyectofinal.model.Presupuesto;
-import java.math.BigDecimal;
+import mx.uacm.edu.proyecto.proyectofinal.dto.PresupuestoDTO;
+import mx.uacm.edu.proyecto.proyectofinal.dto.PresupuestoUpdateDTO;
 
 public interface PresupuestoService {
 
-    // Obtener presupuesto de una etapa
-    Presupuesto obtenerPorEtapa(Long idEtapa);
+    // Obtener el presupuesto asociado a una etapa
+    PresupuestoDTO obtenerPresupuestoPorEtapa(Long idEtapa);
 
-    // Actualizar montos (Aprobado o Gastado)
-    Presupuesto actualizarPresupuesto(Long idPresupuesto, BigDecimal nuevoAprobado, BigDecimal nuevoGastado);
+    // Obtener un presupuesto por su propio ID
+    PresupuestoDTO obtenerPresupuestoPorId(Long idPresupuesto);
+
+    // Actualizar los montos de un presupuesto
+    PresupuestoDTO actualizarPresupuesto(Long idPresupuesto, PresupuestoUpdateDTO dto);
 }

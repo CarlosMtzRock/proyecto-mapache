@@ -14,7 +14,10 @@ public interface EtapaService {
     // RF-02: Listar etapas
     List<EtapaResponseDTO> listarEtapasPorProyecto(Long idProyecto);
 
-    // RF-04: Actualizar etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etapa por su ID
+    EtapaResponseDTO obtenerEtapaPorId(Long idEtapa);
+
+    // RF-04: Actualizar etapa (Datos generales o Cambio de Estado)
     EtapaResponseDTO actualizarEtapa(Long idEtapa, EtapaActualizarDTO dto);
 
     // RF-06: Reordenar etapa manual

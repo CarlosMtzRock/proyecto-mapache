@@ -26,7 +26,7 @@ public interface EtapaRepository extends JpaRepository<Etapa, Long> {
             "WHERE e.proyecto.idProyecto = :idProyecto AND e.numeroOrden >= :ordenNuevo")
     void desplazarOrdenes(@Param("idProyecto") Long idProyecto, @Param("ordenNuevo") Integer ordenNuevo);
 
-    // Para el reordenamiento, cubrimos el CASO A: mover una etapa hacia arriba en la lista
+    // Para el reordenamiento, cubrimos el caso para mover una etapa hacia arriba en la lista
     // Esta consulta empuja las etapas intermedias hacia abajo para abrir el espacio en la nueva posición.
     @Modifying
     @Query("UPDATE Etapa e SET e.numeroOrden = e.numeroOrden + 1 " +
@@ -36,7 +36,7 @@ public interface EtapaRepository extends JpaRepository<Etapa, Long> {
                                  @Param("nuevoOrden") Integer nuevoOrden,
                                  @Param("ordenActual") Integer ordenActual);
 
-    // cubrimos el CASO B: mover una etapa hacia abajo
+    // cubrimos el caso para mover una etapa hacia abajo
     // Esta consulta jala las etapas intermedias hacia arriba para cerrar el hueco que dejó la etapa movida.
     @Modifying
     @Query("UPDATE Etapa e SET e.numeroOrden = e.numeroOrden - 1 " +
@@ -59,7 +59,7 @@ public interface EtapaRepository extends JpaRepository<Etapa, Long> {
     long contarActividadesPendientes(@Param("idEtapa") Long idEtapa);
 
     // Para la Regla de Automatización RA-05, el estado de un proyecto depende de sus etapas.
-    // Verificamos si existen etapas que NO estén completadas para decidir si el proyecto puede marcarse como completo.
+    // Verificamos si existen etapas que no estén completadas para decidir si el proyecto puede marcarse como completo.
     boolean existsByProyectoIdProyectoAndEstadoNot(Long idProyecto, EstadoEtapa estado);
 
 
@@ -77,10 +77,9 @@ public interface EtapaRepository extends JpaRepository<Etapa, Long> {
     // Una consulta simple para obtener el número total de etapas de un proyecto.
     long countByProyectoIdProyecto(Long idProyecto);
 
-    // Y otra para contar cuántas de esas etapas están en un estado específico (ej. 'COMPLETADA').
+    // Y otra para contar cuántas de esas etapas están en un estado específico
     long countByProyectoIdProyectoAndEstado(Long idProyecto, mx.uacm.edu.proyecto.proyectofinal.model.EstadoEtapa estado);
 
     // Para la Regla de Automatización RA-09, a veces necesitamos todos los objetos Etapa para cálculos más complejos.
-    // Este método nos los proporciona.
     List<Etapa> findByProyectoIdProyecto(Long idProyecto);
 }
