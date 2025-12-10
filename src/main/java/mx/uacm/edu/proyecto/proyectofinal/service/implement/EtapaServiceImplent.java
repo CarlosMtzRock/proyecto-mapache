@@ -122,16 +122,13 @@ public class EtapaServiceImplent implements EtapaService {
 
             validarTransicion(estadoActual, estadoNuevo);
 
-            // Validaciones especificas para cuando se intenta iniciar una etapa
             if (estadoNuevo == EstadoEtapa.EN_PROGRESO) {
-                // Validacion para RN6
                 String estadoProyecto = etapa.getProyecto().getEstado().toUpperCase();
                 if (!"EN_PROGRESO".equals(estadoProyecto)) {
                     throw new ReglasNegocioException(
                         "Error RN-06: No se puede iniciar la etapa porque el proyecto esta en estado '" + estadoProyecto + "'."
                     );
                 }
-                // Validacion para RN8
                 LocalDate limiteInferior = etapa.getFechaInicioPlan().minusDays(7);
                 if (LocalDate.now().isBefore(limiteInferior)) {
                     throw new ReglasNegocioException(
@@ -142,26 +139,21 @@ public class EtapaServiceImplent implements EtapaService {
 
             switch (estadoNuevo) {
                 case EN_PROGRESO:
-                    // Validacion para RN3
                     if (etapaRepository.contarActividadesPorEtapa(idEtapa) == 0) {
                         throw new ReglasNegocioException("Error RN-03: No se puede iniciar la etapa sin actividades registradas");
                     }
-                    // Regla Automatica RA7
                     if (etapa.getFechaInicioReal() == null) {
                         etapa.setFechaInicioReal(java.time.LocalDate.now());
                     }
                     break;
                 case COMPLETADA:
-                    // Validacion para RN5
                     if (etapa.getPorcentajeAvance() < 100) {
                         throw new ReglasNegocioException("Error RN-05: No se puede completar la etapa con un avance menor al 100%");
                     }
-                    // Validacion para RV5
                     long pendientes = etapaRepository.contarActividadesPendientes(idEtapa);
                     if (pendientes > 0) {
                         throw new ReglasNegocioException("Error RV-05: Existen " + pendientes + " actividades pendientes. Deben cerrarse primero");
                     }
-                    // Regla Automatica RA2 (parcial)
                     etapa.setFechaFinReal(java.time.LocalDate.now());
                     break;
             }
@@ -182,24 +174,24 @@ public class EtapaServiceImplent implements EtapaService {
         Long idProyecto = etapaMover.getProyecto().getIdProyecto();
         Integer ordenActual = etapaMover.getNumeroOrden();
 
-        if (ordenActual.equals(nuevoOrden)) return;
-
-        List<Etapa> etapas = etapaRepository.findByProyectoIdProyectoOrderByNumeroOrdenAsc(idProyecto);
-
-        etapas.removeIf(e -> e.getIdEtapa().equals(idEtapa));
-        int indiceDestino = Math.max(0, Math.min(nuevoOrden - 1, etapas.size()));
-        etapas.add(indiceDestino, etapaMover);
-
-        int temporalBase = 1_000_000;
-        for (int i = 0; i < etapas.size(); i++) {
-            etapas.get(i).setNumeroOrden(temporalBase + i);
+        if (ordenActual.equals(nuevoOrden)) {
+            return;
         }
-        etapaRepository.saveAllAndFlush(etapas);
 
-        for (int i = 0; i < etapas.size(); i++) {
-            etapas.get(i).setNumeroOrden(i + 1);
+        // Movemos la etapa conflictiva fuera del camino usando un valor que sea valido pero improbable.
+        etapaMover.setNumeroOrden(Integer.MAX_VALUE);
+        etapaRepository.saveAndFlush(etapaMover);
+
+        // Moovemos el bloque de etapas intermedias
+        if (nuevoOrden < ordenActual) {
+            etapaRepository.empujarEtapasHaciaAbajo(idProyecto, nuevoOrden, ordenActual);
+        } else {
+            etapaRepository.jalarEtapasHaciaArriba(idProyecto, nuevoOrden, ordenActual);
         }
-        etapaRepository.saveAll(etapas);
+
+        // Colocamos la etapa en su destino final
+        etapaMover.setNumeroOrden(nuevoOrden);
+        etapaRepository.save(etapaMover);
     }
 
     private void validarTransicion(EstadoEtapa actual, EstadoEtapa nuevo) {
