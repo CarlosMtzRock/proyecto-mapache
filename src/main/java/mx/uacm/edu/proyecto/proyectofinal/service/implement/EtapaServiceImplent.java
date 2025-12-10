@@ -123,6 +123,12 @@ public class EtapaServiceImplent implements EtapaService {
             validarTransicion(estadoActual, estadoNuevo);
 
             if (estadoNuevo == EstadoEtapa.EN_PROGRESO) {
+                Proyecto proyecto = etapa.getProyecto();
+                if ("PLANIFICADO".equals(proyecto.getEstado().toUpperCase())) {
+                    proyecto.setEstado("EN_PROGRESO");
+                    proyectoRepository.save(proyecto);
+                }
+
                 String estadoProyecto = etapa.getProyecto().getEstado().toUpperCase();
                 if (!"EN_PROGRESO".equals(estadoProyecto)) {
                     throw new ReglasNegocioException(
@@ -175,21 +181,15 @@ public class EtapaServiceImplent implements EtapaService {
         Integer ordenActual = etapaMover.getNumeroOrden();
 
         if (ordenActual.equals(nuevoOrden)) {
-            return;
+            return; // No hay nada que hacer
         }
 
-        // Movemos la etapa conflictiva fuera del camino usando un valor que sea valido pero improbable.
-        etapaMover.setNumeroOrden(Integer.MAX_VALUE);
-        etapaRepository.saveAndFlush(etapaMover);
-
-        // Moovemos el bloque de etapas intermedias
         if (nuevoOrden < ordenActual) {
             etapaRepository.empujarEtapasHaciaAbajo(idProyecto, nuevoOrden, ordenActual);
         } else {
             etapaRepository.jalarEtapasHaciaArriba(idProyecto, nuevoOrden, ordenActual);
         }
 
-        // Colocamos la etapa en su destino final
         etapaMover.setNumeroOrden(nuevoOrden);
         etapaRepository.save(etapaMover);
     }

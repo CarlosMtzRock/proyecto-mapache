@@ -6,5 +6,5 @@ public enum EstadoEtapa {
     EN_PAUSA,
     COMPLETADA,
     CANCELADA,
-    ATRASADA
+    ATRASADA,
 }

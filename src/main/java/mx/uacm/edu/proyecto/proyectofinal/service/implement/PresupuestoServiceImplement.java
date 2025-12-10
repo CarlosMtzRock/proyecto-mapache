@@ -44,7 +44,10 @@ public class PresupuestoServiceImplement implements PresupuestoService {
         Presupuesto presupuesto = presupuestoRepository.findById(idPresupuesto)
                 .orElseThrow(() -> new ResourceNotFoundException("Presupuesto con ID " + idPresupuesto + " no encontrado"));
 
-        // Validacion del monto aprobado
+        // Guardamos el monto aprobado final para usarlo en las validaciones
+        BigDecimal montoAprobadoFinal = presupuesto.getMontoAprobado();
+
+        // Validacion del monto aprobado (si se proporciona)
         if (dto.getMontoAprobado() != null) {
             Proyecto proyecto = presupuesto.getEtapa().getProyecto();
             BigDecimal techoProyecto = proyecto.getPresupuestoTotalObjetivo();
@@ -59,11 +62,21 @@ public class PresupuestoServiceImplement implements PresupuestoService {
                         String.format("Error RN-09: El nuevo monto (%s) excede el presupuesto del proyecto. Limite: %s. Disponible: %s",
                                 dto.getMontoAprobado(), techoProyecto, disponibleReal));
             }
+            montoAprobadoFinal = dto.getMontoAprobado(); // Actualizamos el valor para la siguiente validación
             presupuesto.setMontoAprobado(dto.getMontoAprobado());
         }
 
-        // Validacion del monto gastado
+        // Validacion del monto gastado (si se proporciona)
         if (dto.getMontoGastado() != null) {
+            // --> INICIO DE LA NUEVA LÓGICA <--
+            // Regla: El monto gastado no puede ser mayor que el monto aprobado final.
+            if (dto.getMontoGastado().compareTo(montoAprobadoFinal) > 0) {
+                throw new ReglasNegocioException(
+                    String.format("El monto gastado (%s) no puede superar el monto aprobado (%s).",
+                                  dto.getMontoGastado(), montoAprobadoFinal)
+                );
+            }
+            // --> FIN DE LA NUEVA LÓGICA <--
             presupuesto.setMontoGastado(dto.getMontoGastado());
         }
 

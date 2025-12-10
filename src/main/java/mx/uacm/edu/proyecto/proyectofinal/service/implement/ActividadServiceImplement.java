@@ -40,6 +40,28 @@ public class ActividadServiceImplement implements ActividadService {
             throw new ReglasNegocioException("No se pueden agregar actividades a una etapa terminada");
         }
 
+        // Lógica de auto-inicio de etapa
+        boolean esPrimeraActividad = !actividadRepository.existsByEtapaIdEtapa(idEtapa);
+        if (etapa.getEstado() == EstadoEtapa.PLANIFICADA && esPrimeraActividad) {
+            // Validamos las reglas del proyecto antes de iniciar la etapa
+            String estadoProyecto = etapa.getProyecto().getEstado().toUpperCase();
+            if (!"EN_PROGRESO".equals(estadoProyecto)) {
+                throw new ReglasNegocioException(
+                    "Error RN-06: No se puede iniciar la etapa (y crear la actividad) porque el proyecto esta en estado '" + estadoProyecto + "'."
+                );
+            }
+            LocalDate limiteInferior = etapa.getFechaInicioPlan().minusDays(7);
+            if (LocalDate.now().isBefore(limiteInferior)) {
+                throw new ReglasNegocioException(
+                    "Error RN-08: No se puede iniciar la etapa (y crear la actividad). La fecha actual es mas de 7 dias anterior a la fecha planificada (" + etapa.getFechaInicioPlan() + ")"
+                );
+            }
+
+            etapa.setEstado(EstadoEtapa.EN_PROGRESO);
+            etapa.setFechaInicioReal(LocalDate.now()); // Regla RA7
+            etapaRepository.save(etapa);
+        }
+
         Actividad actividad = actividadMapper.toEntity(dto, etapa);
         Actividad guardada = actividadRepository.save(actividad);
 
