@@ -156,13 +156,14 @@ MariaDB Server corriendo
 ## Paso 1: Clonar el repositorio
 *git clone https://github.com/CarlosMtzRock/proyecto-mapache*
 
-cd administracion-etapas
+cd proyecto-final-mapeo
+o importar a IntelliJ IDEA
 
 ## Paso 2: Crear la Base de Datos
 
 Ingresa a tu cliente de MariaDB y crea una base de datos con el nombre:
 
 
-*etapasdb;*
+*etapasdb;* y configurar el aplications.properties para añadir usuario, contraseña de tu bd
 
 Paso 3: Ejecutar la aplicación
